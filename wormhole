@@ -1,0 +1,120 @@
+#!/usr/bin/env ruby
+require 'rubygems'
+require 'net/ssh/gateway'
+require 'optparse'
+require 'psych'
+
+# This hash will hold all of the options
+# parsed from the command-line by
+# OptionParser.
+@options = {}
+
+optparse = OptionParser.new do|opts|
+  # Set a banner, displayed at the top
+  # of the help screen.
+  opts.banner = "Usage: wormhole [options]"
+
+  # Define the options, and what they do
+  @options[:server] = nil
+  opts.on( '-s', '--server SERVER', 'The server to connect to' ) do |server|
+    @options[:server] = server
+  end
+
+  @options[:username] = nil
+  opts.on( '-u', '--user USERNAME', 'Your username on the remote server' ) do |username|
+    @options[:username] = username
+  end
+
+  @options[:target_port] = nil
+  opts.on( '-t', '--targetport TARGETPORT', 'The port you wish to connect to on the destination' ) do |targetport|
+    @options[:target_port] = targetport
+  end
+
+  @options[:target_interface] = "127.0.0.1"
+  opts.on( '-i', '--interface INTERFACE', 'The target interface to bind to on the destination' ) do |interface|
+    @options[:target_interface] = interface
+  end
+
+  @options[:local_port] = nil
+  opts.on( '-l', '--localport LOCALPORT', 'The local port to enter the wormhole' ) do |localport|
+    @options[:local_port] = localport
+  end
+
+  @options[:remember] = false
+  opts.on( '-r', '--remember NAME', 'Remember this as a default' ) do |remember|
+    @options[:remember] = remember
+  end
+
+  # This displays the help screen, all programs are
+  # assumed to have this option.
+  opts.on( '-h', '--help', 'Display this screen' ) do
+    puts opts
+    exit
+  end
+end
+
+# Parse the command-line. Remember there are two forms
+# of the parse method. The 'parse' method simply parses
+# ARGV, while the 'parse!' method parses ARGV and removes
+# any options found there, as well as any parameters for
+# the options. What's left is the list of files to resize.
+
+def load_favourite(name)
+  @settings = {}
+  if File.exists?(File.expand_path("~/.wormholes"))
+    sites = Psych.load(File.read(File.expand_path("~/.wormholes")))
+    if !sites[name].nil?
+      @settings = sites[name]
+    end
+  end
+end
+
+def save_favourite
+  `touch ~/.wormholes`
+  load = Psych.load(File.read(File.expand_path("~/.wormholes"))) || {}
+  load[@options.delete(:remember)] = load.merge(@options)
+  File.open(File.expand_path("~/.wormholes"), "w") {|file| file.write(Psych.dump(load))}
+end
+
+
+
+
+
+def open_gateway
+  @status = false
+  gateway = Net::SSH::Gateway.new(@options[:server], @options[:username])
+  gateway.open(@options[:target_interface], @options[:target_port], @options[:local_port])
+
+  save = @options[:remember]
+  save_favourite() if save
+  
+  puts "Gateway Opened."
+  Signal.trap("TERM") do
+    puts "Terminating..."
+    gateway.shutdown!
+    @status = true
+  end
+  Signal.trap("INT") do
+    puts "Terminating..."
+    gateway.shutdown!
+    @status = true
+  end
+
+  sleep(1) until @status == true
+end
+
+
+optparse.parse!
+
+
+if ARGV.count > 0
+  @site = load_favourite(ARGV[0])
+  if @site.length != 0
+    @options = @site
+    @favourite = true
+  end
+else
+
+end
+
+open_gateway()
