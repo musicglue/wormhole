@@ -18,7 +18,7 @@ wormhole myserver #loads saved config and connects
 
 Or:
 wormhole [options]
-  -s localhost e.g. myserver.com
+  -s hostname e.g. myserver.com
   -u username e.g. jimbob
   -t target port e.g. 3000
   -i target interface e.g. 127.0.0.1
